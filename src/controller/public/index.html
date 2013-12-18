@@ -319,6 +319,14 @@
     <div id="hud">
       <img id="snapshot" src="sample.jpeg" />
     </div>
+ <form>
+  Destination: <input type="text" name="dest" id="dest" <br>
+  <input type="button" name="Dest" value="Submit" id="Dest" onclick="pointDirection()">
+    
+    
+</form> 
+
+
     <div id="controls">
       <div id="hallo">TheBot</div>
       <div id="wheel">
@@ -366,11 +374,11 @@
       , xAccelScale = 1.6
       , yAccelScale = 1.4
       , ws = null
-
+      , ws2 = null
     if (!testMode && window.WebSocket) {
       ws = new WebSocket('ws://' + window.location.host + '/ws')
+      ws2 = new WebSocket('ws://' + window.location.host + '/ws2')
     }
-
     function handleOrientationEvent(event) {
       var x = event.beta
         , y = event.gamma
@@ -470,6 +478,18 @@
       }
 
       setInterval(updateSnapshot, 500)
+    }
+
+    function pointDirection() {
+        var destination = document.getElementById(dest)
+        if (ws2.readyState === 1) {
+        ws2.send(destination)
+      } else {
+        $.post("/setswing/" + destination)
+
+    }
+
+
     }
   </script>
 </div>

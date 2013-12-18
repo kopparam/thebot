@@ -1,4 +1,4 @@
-package main
+package ain
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codegangsta/martini"
 	"github.com/gorilla/websocket"
@@ -41,6 +42,8 @@ func (ws *WebServer) registerHandlers() {
 	ws.m.Get("/distance", ws.distance)
 	ws.m.Get("/snapshot", ws.snapshot)
 	ws.m.Post("/reset", ws.reset)
+	ws.m.Post("/setswing/:dest", ws.setSwing)
+	ws.m.Get("/ws2", ws.ws2Handler)
 }
 
 func (ws *WebServer) Run() {
@@ -73,6 +76,30 @@ func (ws *WebServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Print(err)
 			}
+		}
+	}
+}
+
+func (ws *WebServer) ws2Handler(w http.ResponseWriter, r *http.Request) {
+
+	conn, err := websocket.Upgrade(w, r, nil, 1024*1024, 1024)
+	if _, ok := err.(websocket.HandshakeError); ok {
+		http.Error(w, "Not a websocket handshake", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		log.Print(err)
+		return
+	}
+
+	for {
+		messageType, p, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		if messageType == websocket.TextMessage {
+			msg := string(p)
+			ws.point(msg)
+
 		}
 	}
 }
@@ -132,4 +159,53 @@ func (ws *WebServer) setOrientation(speedStr, angleStr string) (code int, err er
 		return http.StatusInternalServerError, err
 	}
 	return 0, nil
+}
+func (ws *WebServer) setSwing(w http.ResponseWriter, params martini.Params) {
+	ws.point(params["dest"])
+
+}
+
+func (ws *WebServer) point(destStr string) {
+
+	dest, _ := strconv.ParseFloat(destStr, 64)
+	var dir int
+	start, _ := ws.comp.Heading()
+    flag_speed := true
+
+	// Determine left/right
+	swing := start - dest
+    if swing <= -180 || (swing >= 0 && swing <= 180) {
+		dir = -1
+	} else if (swing > -180 && swing < 0) || swing > 180 {
+		dir = 1
+	}
+
+	ws.car.Speed(0)
+	ws.car.Turn(90)
+
+	// Initial momentum
+	ws.car.Speed(130)
+	time.Sleep(1 * time.Second)
+
+	// Start turning
+	for i := 90; ; {
+		// Exit if BOT reached destination
+		head, _ := ws.comp.Heading()
+		if head < dest+5 && head > dest-5 {
+			ws.car.Speed(0)
+			ws.car.Turn(90)
+			break
+		}
+		// Turn slowly
+		if i > 75 && i < 105 {
+			i = i + dir
+			ws.car.Turn(i)
+			time.Sleep(10)
+		}
+		// Speed up to componsate for momentum loss during turn
+		if (i < 83 || i > 97) && flag_speed {
+			ws.car.Speed(150)
+            flag_speed = false
+		}
+	}
 }

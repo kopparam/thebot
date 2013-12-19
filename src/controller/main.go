@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"strconv"
+	"time"
 
 	"github.com/kid0m4n/go-rpi/i2c"
 )
@@ -13,7 +15,7 @@ import (
 var (
 	camWidth         = flag.Int("camw", 640, "width of the captured camera image")
 	camHeight        = flag.Int("camh", 480, "height of the captured camera image")
-	camFps           = flag.Int("fps", 4, "fps for camera")
+	camFps           = flag.Int("fps", 1, "fps for camera")
 	arduinoAddrStr   = flag.String("addr", "0x50", "arduino i2c address")
 	fakeCar          = flag.Bool("fcr", false, "fake the car")
 	fakeCam          = flag.Bool("fcm", false, "fake the camera")
@@ -22,7 +24,7 @@ var (
 )
 
 func main() {
-	log.Print("Starting up...")
+	log.Print("Hey! Starting up...")
 
 	flag.Parse()
 
@@ -49,6 +51,8 @@ func main() {
 	rf := NewRangeFinder(*echoPinNumber, *triggerPinNumber)
 
 	ws := NewWebServer(car, cam, comp, rf)
+	go pollforDistance(rf)
+
 	ws.Run()
 
 	quit := make(chan os.Signal, 1)
@@ -56,4 +60,26 @@ func main() {
 	<-quit
 
 	log.Print("All done")
+
+}
+
+func pollforDistance(dist RangeFinder) {
+	var car Car = NullCar
+	if !*fakeCar {
+		car = NewCar(i2c.Default, byte(0x50))
+	}
+
+	for {
+
+		distance, err := dist.Distance()
+		if err != nil {
+			log.Panic(err)
+		}
+		fmt.Println(distance)
+		time.Sleep(100 * time.Millisecond)
+		if distance <= 25 {
+			car.Speed(0)
+		}
+
+	}
 }
